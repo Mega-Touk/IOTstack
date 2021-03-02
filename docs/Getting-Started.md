@@ -1,10 +1,60 @@
 # Getting started
 
-## Introduction to IOTstack - video
+## Introduction to IOTstack - videos
 
-Andreas Spiess video #295
+Andreas Spiess Video #295: Raspberry Pi Server based on Docker, with VPN, Dropbox backup, Influx, Grafana, etc: IOTstack
+[![#295 Raspberry Pi Server based on Docker, with VPN, Dropbox backup, Influx, Grafana, etc: IOTstack](http://img.youtube.com/vi/a6mjt8tWUws/0.jpg)](https://www.youtube.com/watch?v=a6mjt8tWUws)
 
-[![#295 Raspberry Pi Server](http://img.youtube.com/vi/a6mjt8tWUws/0.jpg)](https://www.youtube.com/watch?v=a6mjt8tWUws)
+Andreas Spiess Video #352: Raspberry Pi4 Home Automation Server (incl. Docker, OpenHAB, HASSIO, NextCloud)
+[![#352 Raspberry Pi4 Home Automation Server (incl. Docker, OpenHAB, HASSIO, NextCloud)](http://img.youtube.com/vi/KJRMjUzlHI8/0.jpg)](https://www.youtube.com/watch?v=KJRMjUzlHI8)
+
+## A word about the `sudo` command
+
+Many first-time users of IOTstack get into difficulty by misusing the `sudo` command. The problem is best understood by example. In the following, you would expect `~` (tilde) to expand to `/home/pi`. It does:
+
+```
+$ echo ~/IOTstack
+/home/pi/IOTstack
+```
+
+The command below sends the same `echo` command to `bash` for execution. This is what happens when you type the name of a shell script. You get a new instance of `bash` to run the script:
+
+```
+$ bash -c 'echo ~/IOTstack'
+/home/pi/IOTstack
+```
+
+Same answer. Again, this is what you expect. But now try it with `sudo` on the front:
+
+```
+$ sudo bash -c 'echo ~/IOTstack'
+/root/IOTstack
+```
+
+The answer is different. It is different because `sudo` means "become root, and then run the command". The process of becoming root changes the home directory, and that changes the definition of `~`.
+
+Any script designed for working with IOTstack assumes `~` (or the equivalent `$HOME` variable) expands to `/home/pi`. That assumption is invalidated if the script is run by `sudo`.
+
+Of necessity, any script designed for working with IOTstack will have to invoke `sudo` **inside** the script **when it is required**. You do not need to second-guess the script's designer.
+
+Please try to minimise your use of `sudo` when you are working with IOTstack. Here are some rules of thumb:
+
+1. Is what you are about to run a script? If yes, check whether the script already contains `sudo` commands. Using `menu.sh` as the example:
+
+	```
+	$ grep -c 'sudo' ~/IOTstack/menu.sh
+	28
+	```
+	
+	There are 28 separate uses of `sudo` within `menu.sh`. That means the designer thought about when `sudo` was needed.
+	
+2. Did the command you **just executed** work without `sudo`? Note the emphasis on the past tense. If yes, then your work is done. If no, and the error suggests elevated privileges are necessary, then re-execute the last command like this:
+
+	```
+	$ sudo !!
+	```
+
+It takes time, patience and practice to learn when `sudo` is **actually** needed. Over-using `sudo` out of habit, or because you were following a bad example you found on the web, is a very good way to find that you have created so many problems for yourself that will need to reinstall your IOTstack. *Please* err on the side of caution!
 
 ## Download the project
 
@@ -16,6 +66,12 @@ $ sudo apt install -y git curl
 
 > It does no harm to re-install a package that is already installed. The command either behaves as an update or does nothing, as appropriate.
 
+### Streamlined Installation:
+You can use the installer directly from github to install IOTstack locally with:
+```
+curl -fsSL https://raw.githubusercontent.com/SensorsIot/IOTstack/master/install.sh | bash
+```
+
 IOTstack makes the following assumptions (the first three are Raspberry Pi defaults on a clean installation):
 
 1. You are logged-in as the user "pi"
@@ -23,7 +79,8 @@ IOTstack makes the following assumptions (the first three are Raspberry Pi defau
 3. The home directory for user "pi" is `/home/pi/`
 4. IOTstack is installed at `/home/pi/IOTstack` (with that exact spelling)
 
-Download IOTstack like this:
+### Manual installation:
+Download IOTstack manually like this:
 
 ```
 $ cd
@@ -38,12 +95,13 @@ The menu is used to install Docker and then build the `docker-compose.yml` file 
 
 ### Menu item: Install Docker
 
-Please do **not** try to install `docker` and `docker-compose` via `sudo apt install`. There's more to it than that. Docker needs to be installed by `menu.sh`, like this:
+Please do **not** try to install `docker` and `docker-compose` via `sudo apt install`. There's more to it than that. Docker needs to be installed by `menu.sh`. The menu will prompt you to install docker if it detects that docker is not already installed. You can manually install it from within the `Native Installs` menu:
 
 ```
 $ cd ~/IOTstack
 $ ./menu.sh
-Select "Install Docker"
+Select "Native Installs"
+Select "Install Docker and Docker-Compose"
 ```
 
 Follow the prompts. The process finishes by asking you to reboot. Do that!
@@ -79,17 +137,9 @@ Be patient (and ignore the huge number of warnings).
 
 The commands in this menu execute shell scripts in the root of the project.
 
-It is not necessary to run the scripts from the menu. You can also look inside:
-
-```
-~/IOTstack/scripts
-```
-
-and examine the files to see what they do.
-
 ### Menu item: Miscellaneous commands
 
-Some helpful commands have been added like disabling swap.
+Some helpful commands have been added like disabling swap, or installing SSH keys from github.
 
 ## Useful commands: docker \& docker-compose
 
@@ -108,6 +158,27 @@ $ docker-compose up -d
 ```
 
 Once the stack has been brought up, it will stay up until you take it down. This includes shutdowns and reboots of your Raspberry Pi. If you do not want the stack to start automatically after a reboot, you need to stop the stack before you issue the reboot command.
+
+#### Logging Journald Errors
+
+If you get docker logging error like `Cannot create container for service [service name here]: unknown log opt 'max-file' for journald log driver` run the following command:
+```
+sudo nano /etc/docker/daemon.json
+```
+and change:
+```
+"log-driver": "journald",
+```
+To:
+```
+"log-driver": "json-file",
+```
+
+Logging limits were added to prevent Docker using up lots of RAM if log2ram is enabled, or SD cards being filled with log data and degraded from unnecessary IO.
+
+Docker Logging configurations: https://docs.docker.com/config/containers/logging/configure/
+
+You can also turn logging off or set it to use another option for any service by using the IOTstack `docker-compose-override.yml` file mentioned here: https://sensorsiot.github.io/IOTstack/Custom/
 
 ### Stopping your IOTstack
 
@@ -254,26 +325,7 @@ $ sudo mkdir -p ./volumes/influxdb/data
 
 When InfluxDB starts, it sees that the folder on right-hand-side of the volumes mapping (`/var/lib/influxdb`) is empty and initialises new databases.
 
-This is how **most** containers behave. But there are exceptions. A good example of an exception is Mosquitto. You can work out whether a container might be an exception by inspecting its services directory, like this:
-
-```
-$ ls ~/IOTstack/services/mosquitto
-directoryfix.sh  filter.acl  mosquitto.conf  service.yml  terminal.sh
-$
-```
-
-The presence of `directoryfix.sh` is an *indication* that you *may* need to do a bit more than just erase a volumes directory. In the case of Mosquitto, simply running the `directoryfix.sh` will suffice, as in:
-
-```
-$ cd ~/IOTstack
-$ docker-compose stop mosquitto
-$ sudo rm -rf ./volumes/mosquitto
-$ ./services/mosquitto/directoryfix.sh
-$ docker-compose up -d mosquitto
-```
-
-`directoryfix.sh` recreates the folder structure expected by Mosquitto and gives it the correct permissions and ownership.
-
+This is how **most** containers behave. But there are exceptions. A good example of an exception is Mosquitto.
 ### Sharing files between the Pi and containers
 
 Have a look a the [Wiki](https://sensorsiot.github.io/IOTstack/Containers/Node-RED/#sharing-files-between-node-red-and-the-host) on how to share files between Node-RED and the Pi.
@@ -390,4 +442,4 @@ $ cd ~/IOTstack
 $ sudo git clean -d -x -f
 ```
 
-This is probably the **only** time you should ever need to use `sudo` in conjunction with `git` for IOTstack.
+This is probably the **only** time you should ever need to use `sudo` in conjunction with `git` for IOTstack. This is not recoverable!
